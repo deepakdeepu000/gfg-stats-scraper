@@ -1,101 +1,79 @@
 
-"""
-GeeksforGeeks Profile Scraper API (Optimized)
-
-This module provides asynchronous functions to scrape user profile data.
-It uses a SHARED global browser instance to handle concurrent requests efficiently.
-"""
-
 import re
 import asyncio
+import os
+import dotenv
 from typing import Dict, Any, Optional
 from playwright.async_api import async_playwright, Browser, Playwright
 
-# Constants
+dotenv.load_dotenv()
+
+# Configuration
+# Ensure BROWSERLESS_TOKEN is in your .env or environment variables
+BROWSERLESS_TOKEN = os.getenv("BROWSERLESS_TOKEN", "")
+BROWSER_URL = f"wss://chrome.browserless.io?token={BROWSERLESS_TOKEN}"
+
 GFG_BASE_URL = "https://www.geeksforgeeks.org/profile"
-TIMEOUT_STD = 45000  
+TIMEOUT_STD = 45000 
 TIMEOUT_SHORT = 30000
 
-# Global State for Reusing Browser
+# Global State
 _PLAYWRIGHT: Optional[Playwright] = None
 _BROWSER: Optional[Browser] = None
 _LOCK = asyncio.Lock()
-
 _REQUEST_COUNT = 0
 _MAX_REQUESTS_PER_BROWSER = 100
 
 async def get_browser() -> Browser:
+    """Connects to Browserless via CDP and reuses the connection."""
     global _PLAYWRIGHT, _BROWSER, _REQUEST_COUNT
     
     async with _LOCK:
-        # Recreate browser after threshold to prevent memory buildup
+        # Refresh browser connection after threshold to keep session clean
         if _BROWSER and _REQUEST_COUNT >= _MAX_REQUESTS_PER_BROWSER:
             await _BROWSER.close()
             _BROWSER = None
             _REQUEST_COUNT = 0
         
         if _BROWSER is None:
-            print("🚀 Launching Global Browser...")
-            _PLAYWRIGHT = await async_playwright().start()
-            _BROWSER = await _PLAYWRIGHT.firefox.launch(
-                headless=True,
-                args=[
-                    "--no-sandbox",
-                    "--disable-setuid-sandbox",
-                    "--disable-dev-shm-usage",
-                    "--disable-gpu"
-                ]
-            )
+            print("🚀 Connecting to Remote Browserless...")
+            if _PLAYWRIGHT is None:
+                _PLAYWRIGHT = await async_playwright().start()
+            
+            # Browserless uses Chromium for its CDP interface
+            _BROWSER = await _PLAYWRIGHT.chromium.connect_over_cdp(BROWSER_URL)
+            
         _REQUEST_COUNT += 1
     return _BROWSER
 
 async def close_browser():
-    """Call this on app shutdown to clean up resources."""
+    """Cleanup resources on shutdown."""
     global _PLAYWRIGHT, _BROWSER
-    
-    print("🛑 Shutting down Global Browser...")
-    async with _LOCK:  # <--- FIX: Acquire lock to prevent race with get_browser
+    async with _LOCK:
         if _BROWSER:
-            try:
-                await _BROWSER.close()
-            except Exception as e:
-                # Ignore errors if browser is already closed/crashed
-                print(f"⚠️ Browser close error (ignored): {e}")
-            finally:
-                _BROWSER = None
-        
+            await _BROWSER.close()
+            _BROWSER = None
         if _PLAYWRIGHT:
-            try:
-                await _PLAYWRIGHT.stop()
-            except Exception:
-                pass
+            await _PLAYWRIGHT.stop()
             _PLAYWRIGHT = None
-            
-    print("✅ Global Browser Stopped")
-
+    print("🛑 Remote Browser Disconnected")
 
 # --- Scraper Functions ---
 
 async def fetch_user_profile(username: str) -> Dict[str, Any]:
     url = f"{GFG_BASE_URL}/{username}"
     browser = await get_browser()
-    
-    # Create lightweight context (like a new tab)
-    context = await browser.new_context(
-        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    )
+    context = await browser.new_context()
     page = await context.new_page()
 
     try:
-        await page.goto(url, wait_until="networkidle", timeout=TIMEOUT_SHORT)
-        
-        # Check if user exists (redirects often imply invalid user)
+        await page.goto(url, wait_until="domcontentloaded", timeout=TIMEOUT_SHORT)
         if "auth" in page.url:
-             return {"error": "User not found or profile private", "userName": username}
+            return {"error": "User not found or private profile", "userName": username}
 
         data = {
             "userName": username,
-            "fullName": "",
+            "fullName": username,
             "designation": "",
             "codingScore": 0,
             "problemsSolved": 0,
@@ -106,54 +84,27 @@ async def fetch_user_profile(username: str) -> Dict[str, Any]:
             "potdsSolved": 0
         }
 
-        # Safe extraction helper
-        async def get_text(selector):
-            if await page.locator(selector).count() > 0:
-                return await page.locator(selector).first.text_content()
-            return ""
-
-        data["fullName"] = await get_text(".NewProfile_name__N_Nlw") or username
-        data["designation"] = await get_text(".NewProfile_designation__fujtZ")
-
-        # Extract Score Cards
-        cards = page.locator(".ScoreContainer_score-card__zI4vG")
-        count = await cards.count()
+        # Safe extraction
+        name = await page.locator(".NewProfile_name__N_Nlw").first.text_content() if await page.locator(".NewProfile_name__N_Nlw").count() > 0 else username
+        data["fullName"] = name.strip()
         
-        for i in range(count):
+        designation = await page.locator(".NewProfile_designation__fujtZ").first.text_content() if await page.locator(".NewProfile_designation__fujtZ").count() > 0 else ""
+        data["designation"] = designation.strip()
+
+        # Score Cards
+        cards = page.locator(".ScoreContainer_score-card__zI4vG")
+        for i in range(await cards.count()):
             card = cards.nth(i)
             label = await card.locator(".ScoreContainer_label__aVpLE").text_content()
-            val_text = await card.locator(".ScoreContainer_value__7yy7h").text_content()
-            
-            if not label or not val_text: continue
-            
-            val = val_text.strip()
-            if val == "__": continue
-            
-            try:
-                num = int(val)
+            val = await card.locator(".ScoreContainer_value__7yy7h").text_content()
+            if label and val and val.strip() != "__":
+                num = int(val.strip())
                 if "Coding Score" in label: data["codingScore"] = num
                 elif "Problems Solved" in label: data["problemsSolved"] = num
                 elif "Institute Rank" in label: data["instituteRank"] = num
                 elif "Articles Published" in label: data["articlesPublished"] = num
-            except: pass
-
-        # Extract POTD
-        streak_items = page.locator(".PotdContainer_statItem__YU3BX")
-        s_count = await streak_items.count()
-        for i in range(s_count):
-            item = streak_items.nth(i)
-            lbl = await item.locator(".PotdContainer_statLabel__tc6R1").text_content()
-            val = await item.locator(".PotdContainer_statValue__nt1dr").text_content()
-            
-            if lbl and val:
-                try:
-                    num = int(val.strip().split()[0]) # "120 / 500" -> 120
-                    if "Longest Streak" in lbl: data["longestStreak"] = num
-                    elif "POTDs Solved" in lbl: data["potdsSolved"] = num
-                except: pass
 
         return data
-
     except Exception as e:
         return {"error": str(e), "userName": username}
     finally:
@@ -161,37 +112,34 @@ async def fetch_user_profile(username: str) -> Dict[str, Any]:
         await context.close()
 
 async def get_gfg_data(username: str) -> Dict[str, Any]:
+    """Retrieves quick stats by difficulty."""
     url = f"{GFG_BASE_URL}/{username}?tab=activity"
-    
     browser = await get_browser()
-    context = await browser.new_context(
-    )
+    context = await browser.new_context()
     page = await context.new_page()
     try:
-        await page.goto(url, wait_until="networkidle", timeout=TIMEOUT_SHORT)
-        
+        await page.goto(url, wait_until="domcontentloaded", timeout=TIMEOUT_SHORT)
         navbar = page.locator('.ProblemNavbar_head__6ptDV')
         if await navbar.count() == 0:
             return {"error": "Stats not found", "userName": username}
 
-        text = await navbar.text_content()
+        text = await navbar.inner_text()
         numbers = re.findall(r'\((\d+)\)', text)
         tags = ["School", "Basic", "Easy", "Medium", "Hard"]
         
-        if len(numbers) >= 5:
-            stats = {tags[i]: int(numbers[i]) for i in range(5)}
-            stats["userName"] = username
-            stats["totalProblemsSolved"] = sum(int(v) if isinstance(v, str) else v for v in stats.values() if isinstance(v, (int, str)) and str(v).isdigit())
-            return stats
-            
-        return {"error": "Incomplete stats", "userName": username}
-
+        stats = {tags[i]: int(numbers[i]) for i in range(min(len(numbers), 5))}
+        return {
+            "userName": username,
+            "totalProblemsSolved": sum(stats.values()),
+            "problemsByDifficulty": stats
+        }
     except Exception as e:
         return {"error": str(e), "userName": username}
     finally:
         await page.close()
         await context.close()
-
+        
+        
 async def fetch_problem_list(username: str) -> Dict[str, Any]:
     """
     Scrapes the detailed list of solved problems for each difficulty level.
