@@ -18,11 +18,11 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 
 # Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN  pip install --no-deps -r requirements.txt
+RUN pip install --only-binary=:all: fastapi uvicorn requests beautifulsoup4 playwright
 
 # Install Playwright Browsers (Firefox only to save space/time)
-RUN playwright install firefox
-RUN playwright install-deps firefox
+RUN playwright-core install firefox
 
 # Copy the rest of the application
 COPY . .
