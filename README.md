@@ -116,7 +116,7 @@ GET /stats/[username]/?format=json
 **Example Response (JSON):**
 ```json
 {
-  "userName": "pampana__deepak",
+  "userName": "gfg_user_",
   "School": 25,
   "Basic": 40,
   "Easy": 75,
