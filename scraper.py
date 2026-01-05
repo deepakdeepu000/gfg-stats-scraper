@@ -341,7 +341,7 @@ async def fetch_user_profile(username: str) -> Dict[str, Any]:
             )
             page = await context.new_page()
 
-            await page.goto(url, wait_until="domcontentloaded", timeout=TIMEOUT_SHORT)
+            await page.goto(url, wait_until="networkidle", timeout=TIMEOUT_SHORT)
             
             if "auth" in page.url:
                 return {"error": "User not found or private profile", "userName": username}
@@ -422,7 +422,7 @@ async def get_gfg_data(username: str) -> Dict[str, Any]:
             context = await browser.new_context()
             page = await context.new_page()
             
-            await page.goto(url, wait_until="domcontentloaded", timeout=TIMEOUT_SHORT)
+            await page.goto(url, wait_until="networkidle", timeout=TIMEOUT_SHORT)
             
             navbar = page.locator('.ProblemNavbar_head__6ptDV')
             if await navbar.count() == 0:
@@ -548,5 +548,6 @@ async def fetch_problem_list(username: str) -> Dict[str, Any]:
                     await context.close()
             except Exception as e:
                 print(f"⚠️ Cleanup error: {e}")
+
 
 
