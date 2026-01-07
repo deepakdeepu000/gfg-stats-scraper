@@ -242,12 +242,12 @@ Returns an SVG image (Content-Type: `image/svg+xml`)
 
 **Usage in Markdown:**
 ```markdown
-![GFG Stats](https://gfg-stats-scraper.onrender.com/username)
+![GFG Stats](https://geeksforgeeks-stats-api.onrender.com/username)
 ```
 
 **Usage in HTML:**
 ```html
-<img src="https://gfg-stats-scraper.onrender.com/username" alt="GFG Stats" />
+<img src="https://geeksforgeeks-stats-api.onrender.com/username" alt="GFG Stats" />
 ```
 
 ---
@@ -297,7 +297,7 @@ All endpoints return errors in the following format:
 ```javascript
 // Fetch user profile
 async function getUserProfile(username) {
-  const response = await fetch(`https:/gfg-stats-scraper.onrender.com/${username}/profile`);
+  const response = await fetch(`https:/geeksforgeeks-stats-api.onrender.com/${username}/profile`);
   
   if (!response.ok) {
     throw new Error('Profile not found');
@@ -310,14 +310,14 @@ async function getUserProfile(username) {
 
 // Fetch stats
 async function getUserStats(username) {
-  const response = await fetch(`https://gfg-stats-scraper.onrender.com/${username}/stats?format=json`);
+  const response = await fetch(`https://geeksforgeeks-stats-api.onrender.com/${username}/stats?format=json`);
   const data = await response.json();
   return data;
 }
 
 // Fetch all problems
 async function getUserProblems(username) {
-  const response = await fetch(`https://gfg-stats-scraper.onrender.com/${username}/problems`);
+  const response = await fetch(`https://geeksforgeeks-stats-api.onrender.com/${username}/problems`);
   const data = await response.json();
   return data;
 }
@@ -333,7 +333,7 @@ getUserProfile('gfg_user_')
 ```python
 import requests
 
-BASE_URL = "https://gfg-stats-scraper.onrender.com"
+BASE_URL = "https://geeksforgeeks-stats-api.onrender.com"
 
 def get_user_profile(username):
     """Fetch user profile"""
@@ -373,19 +373,19 @@ except requests.exceptions.HTTPError as e:
 
 ```bash
 # Get profile
-curl -X GET "https://gfg-stats-scraper.onrender.com/profile/[username]"
+curl -X GET "https://geeksforgeeks-stats-api.onrender.com/profile/[username]"
 
 # Get stats (JSON)
-curl -X GET "https://gfg-stats-scraper.onrender.com/stats/[username]format=json"
+curl -X GET "https://geeksforgeeks-stats-api.onrender.com/stats/[username]format=json"
 
 # Get stats (SVG)
-curl -X GET "https://gfg-stats-scraper.onrender.com/stats/[username]/format=svg" -o stats.svg
+curl -X GET "https://geeksforgeeks-stats-api.onrender.com/stats/[username]/format=svg" -o stats.svg
 
 # Get problems
-curl -X GET "https://gfg-stats-scraper.onrender.com/problems/[username]"
+curl -X GET "https://geeksforgeeks-stats-api.onrender.com/problems/[username]"
 
 # Get SVG card
-curl -X GET "https://gfg-stats-scraper.onrender.com/[username]" -o card.svg
+curl -X GET "https://geeksforgeeks-stats-api.onrender.com/[username]" -o card.svg
 ```
 
 ### React/Next.js
@@ -535,7 +535,7 @@ function GFGProfile({ username }: { username: string }) {
 ```markdown
 # My GFG Profile
 
-![GFG Stats](https://gfg-stats-scraper.onrender.com/your_username/card)
+![GFG Stats](https://geeksforgeeks-stats-api.onrender.com/your_username/card)
 
 ## Stats
 - **Coding Score:** 2150
@@ -552,7 +552,7 @@ function GFGProfile({ username }: { username: string }) {
 </head>
 <body>
     <h1>My GeeksforGeeks Progress</h1>
-    <img src="https://gfg-stats-scraper.onrender.com/your_username/card" 
+    <img src="https://geeksforgeeks-stats-api.onrender.com/your_username/card" 
          alt="GFG Stats Card"
          style="max-width: 500px;">
 </body>
